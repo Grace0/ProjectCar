@@ -4,9 +4,9 @@
 
 uint16_t sensorValues[8]; 
 
-uint16_t sensorMins[8] = {600,  528, 552, 552, 460, 529, 575, 598};//{573, 504, 527, 573, 504, 550, 596, 596}; //may 6 -- get sensorMins each time?
-uint16_t sensorMaxes[8] = {1900, 1972,  1948,  1948,  2040,  1971,  1925,  1902};//{1927, 1996,  1973,  1927,  1996,  1950,  1904,  1904}; // get sensorMaxes each time?
-
+uint16_t sensorMins[8] = {600,  528, 552, 552, 460, 529, 575, 598};//{573, 504, 527, 573, 504, 550, 596, 596}; old //may 6 -- get sensorMins each time? 
+uint16_t sensorMaxes[8] = {1900, 1972,  1948,  1948,  2040,  1971,  1925,  1902};//}{1927, 1996,  1973,  1927,  1996,  1950,  1904,  1904}; // get sensorMaxes each time? 
+int sensorWeight[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
 
 //const int DARKEST_READING = 1000;
 
@@ -29,10 +29,10 @@ const int LED_LB = 57; //left back - right front red
 //MOTOR CONSTANTS
 const float Kp = 0.1; //250 error = 25 PWM change
 const float Kd = 0.0;
-const float Kf = 11.0; // out of 255
+const int Kf = 20; // out of 255
 float P;
 float D;
-float F;
+int F;
 
 float error = 0.0;
 float prev_error = error;
@@ -88,13 +88,18 @@ void setup() {
 
 void loop() {
 
+  
   ECE3_read_IR(sensorValues);
-  calculateError();
-
+  
+  error = 0;
+  for (int i = 0; i < 8; i++) {
+    error += sensorWeight[i] * ((sensorValues[i] - sensorMins[i]) * 1000.0 / sensorMaxes[i]);
+  }
+//error = 600;
   P = Kp * error;
   D = Kd * (error - prev_error);
-  F = Kf;
-
+  F = Kf; //not scaled
+//
   output = P + D;
 
    lOutput = F;
@@ -102,6 +107,10 @@ void loop() {
 
   lOutput += output;
   rOutput -= output;
+
+  analogWrite(left_pwm_pin, lOutput);
+  analogWrite(right_pwm_pin, rOutput);
+
 
 //    if (lOutput > 0) { //...doesn't work?
 //    digitalWrite(left_dir_pin,HIGH);
@@ -115,14 +124,22 @@ void loop() {
 //    digitalWrite(right_dir_pin,LOW);
 //  }
 
+//if (error > 500) {
+//  digitalWrite(LED_LF, HIGH);
+//  digitalWrite(LED_RF, LOW);
+//} else if (error < -500) {
+//  digitalWrite(LED_RF, HIGH);
+//  digitalWrite(LED_LF, LOW);
+//} else {
+//  digitalWrite(LED_LF, LOW);
+//  digitalWrite(LED_LF, LOW);
+//}
 
-Serial.print(error); 
-Serial.println();
+//Serial.print(error); 
+//Serial.println();
   //Serial.print("\t");
   //.Serial.println(rOutput);
 
- // analogWrite(left_pwm_pin, lOutput);
- // analogWrite(right_pwm_pin, rOutput);
 
   //delay(100);
         
@@ -170,19 +187,18 @@ Serial.println();
   }
 
 //sensor fusion
-void calculateError() {
-
-  for (unsigned char i = 0; i < 8; i++) {
-    sensorValues[i] -= sensorMins[i]; //644  573 596 620 549 573 573 596 -- mins
-
-    sensorValues[i] = sensorValues[i] / sensorMaxes[i] * 1000;
-  }
-  
-  error = sensorFusionAlg();
-}
+//void calculateError() {
+//
+//  for (unsigned char i = 0; i < 8; i++) {
+//    sensorValues[i] -= sensorMins[i]; 
+//    sensorValues[i] = sensorValues[i] / sensorMaxes[i] * 1000;
+//    error += sensorWeight[i] * sensorValues[i];
+//  }
+// 
+//}
 
 void runPID() {
-  calculateError();
+ // calculateError();
   //Serial.println(error);
   P = Kp * error;
   D = Kd * (error - prev_error);
@@ -233,9 +249,9 @@ void runPID() {
   prev_error = error;
 }
 
-float sensorFusionAlg() {
-  return (-8.0*sensorValues[0]-4.0*sensorValues[1]-2.0*sensorValues[2]-1.0*sensorValues[3]+1.0*sensorValues[4]+2.0*sensorValues[5]+4.0*sensorValues[6]+8.0*sensorValues[7])/4.0;
-}
+//float sensorFusionAlg() {
+//  return 
+//}
 
 
 bool hasLostPath() { //if all sensors read <500, we lost the path
@@ -244,7 +260,7 @@ bool hasLostPath() { //if all sensors read <500, we lost the path
       return false;
     }
   }
-  blinkLED();
+  blinkLEDRF(); //for now
   return true;
 }
 
@@ -254,7 +270,14 @@ bool calibrate() {
   return isSuccess;
 }
 
-void blinkLED() {
+void blinkLEDRF() {
+  digitalWrite(LED_LF, HIGH);
+  delay(250);
+  digitalWrite(LED_LF, LOW);
+  delay(250);
+}
+
+void blinkLEDLF() {
   digitalWrite(LED_RF, HIGH);
   delay(250);
   digitalWrite(LED_RF, LOW);
@@ -267,7 +290,7 @@ bool hasDetectedCrossbar() {
       return false;
    }
   }
-  blinkLED();
+  blinkLEDRF(); //for now
   return true;
 }
 
